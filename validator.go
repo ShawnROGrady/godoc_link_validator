@@ -38,7 +38,12 @@ func (e errorSet) Error() string {
 	return strings.Join(errsS, "\n")
 }
 
-func validatePath(root string, re *regexp.Regexp) error {
+type validator struct {
+	checkRe  *regexp.Regexp
+	ignoreRe *regexp.Regexp
+}
+
+func (v *validator) validatePath(root string) error {
 	var (
 		errs = errorSet{}
 		m    sync.Mutex
@@ -61,14 +66,14 @@ func validatePath(root string, re *regexp.Regexp) error {
 		}
 		for _, link := range links {
 			wg.Add(1)
-			go func(link string, re *regexp.Regexp) {
+			go func(link string) {
 				defer wg.Done()
-				if err := validateLink(link, re); err != nil {
+				if err := v.validateLink(link); err != nil {
 					m.Lock()
 					errs = append(errs, validateErr{err: err, fp: path})
 					m.Unlock()
 				}
-			}(link, re)
+			}(link)
 		}
 		return nil
 	}); err != nil {
@@ -104,13 +109,13 @@ func getLinks(src io.Reader) ([]string, error) {
 	return links, nil
 }
 
-func validateLink(link string, re *regexp.Regexp) error {
+func (v *validator) validateLink(link string) error {
 	u, err := url.Parse(link)
 	if err != nil {
 		return fmt.Errorf("error parsing '%s': %w", link, err)
 	}
 
-	if !shouldCheck(u, re) {
+	if !v.shouldCheck(u) {
 		return nil
 	}
 
@@ -129,9 +134,12 @@ func validateLink(link string, re *regexp.Regexp) error {
 	return nil
 }
 
-func shouldCheck(u *url.URL, re *regexp.Regexp) bool {
-	if re == nil {
-		return true
+func (v *validator) shouldCheck(u *url.URL) bool {
+	if v.ignoreRe != nil {
+		return !v.ignoreRe.MatchString(u.Host)
 	}
-	return re.MatchString(u.Host)
+	if v.checkRe != nil {
+		return v.checkRe.MatchString(u.Host)
+	}
+	return true
 }
