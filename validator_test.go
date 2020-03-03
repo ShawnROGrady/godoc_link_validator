@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -25,10 +26,11 @@ var validatePathTests = map[string]struct {
 }
 
 func TestValidatePath(t *testing.T) {
+	checkRe := regexp.MustCompile(`golang\.org`)
 	for testName, testCase := range validatePathTests {
 		t.Run(testName, func(t *testing.T) {
 			root := filepath.Join("testdata", testCase.path)
-			err := validatePath(root)
+			err := validatePath(root, checkRe)
 			if err != nil {
 				if !testCase.expectErr || testCase.expectedErrCount == 0 {
 					t.Errorf("unexpected error: %s", err)

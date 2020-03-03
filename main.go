@@ -1,15 +1,24 @@
 package main
 
 import (
+	"flag"
 	"log"
-	"os"
+	"regexp"
 )
 
 func main() {
-	if len(os.Args) != 2 {
+	checkExpr := flag.String("check", ".", "a regex indicating the URL host(s) which should be checked")
+	flag.Parse()
+
+	if len(flag.Args()) != 1 {
 		log.Fatal("must provide root of path to validate")
 	}
-	if err := validatePath(os.Args[1]); err != nil {
+	re, err := regexp.Compile(*checkExpr)
+	if err != nil {
+		log.Fatalf("error compiling provided check expression: %s", err)
+	}
+
+	if err := validatePath(flag.Args()[0], re); err != nil {
 		log.Fatal(err)
 	}
 }

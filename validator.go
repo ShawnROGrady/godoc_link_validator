@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -37,7 +38,7 @@ func (e errorSet) Error() string {
 	return strings.Join(errsS, "\n")
 }
 
-func validatePath(root string) error {
+func validatePath(root string, re *regexp.Regexp) error {
 	var (
 		errs = errorSet{}
 		m    sync.Mutex
@@ -60,14 +61,14 @@ func validatePath(root string) error {
 		}
 		for _, link := range links {
 			wg.Add(1)
-			go func(link string) {
+			go func(link string, re *regexp.Regexp) {
 				defer wg.Done()
-				if err := validateLink(link); err != nil {
+				if err := validateLink(link, re); err != nil {
 					m.Lock()
 					errs = append(errs, validateErr{err: err, fp: path})
 					m.Unlock()
 				}
-			}(link)
+			}(link, re)
 		}
 		return nil
 	}); err != nil {
@@ -103,14 +104,13 @@ func getLinks(src io.Reader) ([]string, error) {
 	return links, nil
 }
 
-func validateLink(link string) error {
+func validateLink(link string, re *regexp.Regexp) error {
 	u, err := url.Parse(link)
 	if err != nil {
 		return fmt.Errorf("error parsing '%s': %w", link, err)
 	}
 
-	if strings.HasPrefix(u.Host, "localhost") || strings.HasPrefix(u.Host, "example") {
-		// ignore
+	if !shouldCheck(u, re) {
 		return nil
 	}
 
@@ -127,4 +127,11 @@ func validateLink(link string) error {
 	}
 
 	return nil
+}
+
+func shouldCheck(u *url.URL, re *regexp.Regexp) bool {
+	if re == nil {
+		return true
+	}
+	return re.MatchString(u.Host)
 }
