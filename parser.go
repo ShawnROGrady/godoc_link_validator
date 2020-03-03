@@ -1,10 +1,12 @@
 package main
 
 import (
+	"go/ast"
 	"go/doc"
 	"go/parser"
 	"go/token"
 	"io"
+	"strings"
 )
 
 func populateHTML(dst io.Writer, fp string) error {
@@ -15,23 +17,55 @@ func populateHTML(dst io.Writer, fp string) error {
 	}
 
 	for _, pkg := range pkgs {
-		pkgHTML(dst, pkg)
+		pkg.writeHTML(dst)
 	}
 
 	return nil
 }
 
-func dirPkgs(fset *token.FileSet, path string) (map[string]*doc.Package, error) {
+type docPkg struct {
+	pkg       *doc.Package
+	testFiles []*ast.File
+}
+
+func dirPkgs(fset *token.FileSet, path string) ([]*docPkg, error) {
 	pkgs, err := parser.ParseDir(fset, path, nil, parser.ParseComments)
 	if err != nil {
 		return nil, err
 	}
 
-	docPkgs := make(map[string]*doc.Package, len(pkgs))
+	docPkgs := make([]*docPkg, len(pkgs))
+	i := 0
 	for pkgName, pkg := range pkgs {
-		docPkgs[pkgName] = doc.New(pkg, pkg.Name, 0)
+		var (
+			testFiles  []*ast.File
+			otherFiles []*ast.File
+		)
+		for fName, f := range pkg.Files {
+			if strings.HasSuffix(fName, "_test.go") {
+				testFiles = append(testFiles, f)
+			} else {
+				otherFiles = append(otherFiles, f)
+			}
+		}
+		docP, err := doc.NewFromFiles(fset, otherFiles, pkgName)
+		if err != nil {
+			return nil, err
+		}
+		docPkgs[i] = &docPkg{
+			pkg:       docP,
+			testFiles: testFiles,
+		}
+		i++
 	}
 	return docPkgs, nil
+}
+
+func (p *docPkg) writeHTML(dst io.Writer) {
+	pkgHTML(dst, p.pkg)
+	for _, ex := range doc.Examples(p.testFiles...) {
+		exHTML(dst, ex)
+	}
 }
 
 func pkgHTML(dst io.Writer, pkg *doc.Package) {
