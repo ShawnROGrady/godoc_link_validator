@@ -45,7 +45,6 @@ func validatePath(root string) error {
 	)
 	if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			fmt.Println(path)
 			return err
 		}
 		if !info.IsDir() {
@@ -109,7 +108,9 @@ func validateLink(link string) error {
 	if err != nil {
 		return fmt.Errorf("error parsing '%s': %w", link, err)
 	}
+
 	if strings.HasPrefix(u.Host, "localhost") || strings.HasPrefix(u.Host, "example") {
+		// ignore
 		return nil
 	}
 
