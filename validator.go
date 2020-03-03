@@ -59,15 +59,17 @@ func validatePath(root string) error {
 		if err != nil {
 			return err
 		}
-		wg.Add(1)
-		go func(links []string) {
-			defer wg.Done()
-			if err := validateLinks(links); err != nil {
-				m.Lock()
-				errs = append(errs, validateErr{err: err, fp: path})
-				m.Unlock()
-			}
-		}(links)
+		for _, link := range links {
+			wg.Add(1)
+			go func(link string) {
+				defer wg.Done()
+				if err := validateLink(link); err != nil {
+					m.Lock()
+					errs = append(errs, validateErr{err: err, fp: path})
+					m.Unlock()
+				}
+			}(link)
+		}
 		return nil
 	}); err != nil {
 		return err
@@ -102,27 +104,25 @@ func getLinks(src io.Reader) ([]string, error) {
 	return links, nil
 }
 
-func validateLinks(links []string) error {
-	for _, link := range links {
-		u, err := url.Parse(link)
-		if err != nil {
-			return fmt.Errorf("error parsing '%s': %w", link, err)
-		}
-		if strings.HasPrefix(u.Host, "localhost") || strings.HasPrefix(u.Host, "example") {
-			continue
-		}
+func validateLink(link string) error {
+	u, err := url.Parse(link)
+	if err != nil {
+		return fmt.Errorf("error parsing '%s': %w", link, err)
+	}
+	if strings.HasPrefix(u.Host, "localhost") || strings.HasPrefix(u.Host, "example") {
+		return nil
+	}
 
-		resp, err := http.DefaultClient.Head(link)
-		if err != nil {
-			return fmt.Errorf("error retrieving '%s': %w", link, err)
-		}
-		if resp.StatusCode >= 400 {
-			return fmt.Errorf("http HEAD '%s' status code: %d", link, resp.StatusCode)
-		}
+	resp, err := http.DefaultClient.Head(link)
+	if err != nil {
+		return fmt.Errorf("error retrieving '%s': %w", link, err)
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("http HEAD '%s' status code: %d", link, resp.StatusCode)
+	}
 
-		if err := resp.Body.Close(); err != nil {
-			return fmt.Errorf("error closing resp body: %w", err)
-		}
+	if err := resp.Body.Close(); err != nil {
+		return fmt.Errorf("error closing resp body: %w", err)
 	}
 
 	return nil
